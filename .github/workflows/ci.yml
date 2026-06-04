@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-checks:
+    name: Python checks
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile Python files
+        run: |
+          python -m compileall .
+
+      - name: Basic import check
+        run: |
+          python - <<'PY'
+          import importlib
+
+          modules = [
+              "config.settings",
+              "services.supabase_client",
+              "pages.config_page",
+              "pages.results_page",
+          ]
+
+          for module in modules:
+              importlib.import_module(module)
+
+          print("Basic imports OK")
+          PY
+
+      - name: Streamlit smoke test
+        run: |
+          streamlit run app.py \
+            --server.headless true \
+            --server.port 8501 &
+          sleep 8
+          curl -f http://localhost:8501/_stcore/health
+
+      - name: Run tests if tests folder exists
+        run: |
+          if [ -d tests ]; then
+            pip install pytest
+            pytest -q
+          else
+            echo "No tests/ folder found. Skipping pytest."
+          fi
