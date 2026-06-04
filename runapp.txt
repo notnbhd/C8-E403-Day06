@@ -1,5 +1,0 @@
-python -m venv .venv
-.\.venv\Scripts\pip.exe install -r requirements.txt
-copy .env.example .env
-# Edit .env to add your Supabase URL and KEY
-.\.venv\Scripts\python.exe -m streamlit run app.py

@@ -2,10 +2,10 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
-load_dotenv()
+load_dotenv(override=True)
 
-# Prefer an explicit DATABASE_URL; fall back to SUPABASE_DB_URL / SUPABASE_URL
-DATABASE_URL = os.getenv("SUPABASE_URL")
+# SQLAlchemy needs the Postgres connection string, not the Supabase API URL.
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 def get_engine(echo: bool = False):

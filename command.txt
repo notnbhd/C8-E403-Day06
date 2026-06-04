@@ -1,0 +1,16 @@
+python -m venv .venv
+.\.venv\Scripts\pip.exe install -r requirements.txt
+copy .env.example .env
+# Edit .env to add SUPABASE_URL, SUPABASE_KEY, DATABASE_URL, GEMINI_API_KEY, and CUSTOM_LLM_KEY.
+
+# Apply database migrations to Supabase.
+.\.venv\Scripts\alembic.exe -c db\alembic.ini upgrade head
+
+# Build or refresh the local ChromaDB index from the PDF.
+.\.venv\Scripts\python.exe ingest.py
+
+# Run the FastAPI app at http://localhost:8000.
+.\.venv\Scripts\python.exe -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+# Optional: create a new migration after editing SQLAlchemy models.
+.\.venv\Scripts\alembic.exe -c db\alembic.ini revision --autogenerate -m "describe schema change"
