@@ -11,6 +11,8 @@ out["routine"] + nút Confirm/Cancel rồi gọi resume(...).
 """
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -18,6 +20,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
 from agent.graph import build_graph
+from agent.logging_config import preview
+
+log = logging.getLogger("agent.runner")
 
 # Một checkpointer in-memory cho cả tiến trình (giữ memory theo thread_id).
 # Production: thay bằng PostgresSaver(Supabase) — xem docs §3.
@@ -44,18 +49,36 @@ def _format(result: dict[str, Any]) -> dict[str, Any]:
     return {"status": "ok", "reply": reply, "intent": result.get("intent")}
 
 
+def _log_out(t0: float, out: dict[str, Any]) -> None:
+    dt = (time.perf_counter() - t0) * 1000
+    if out["status"] == "awaiting_confirm":
+        name = (out.get("routine") or {}).get("name")
+        log.info("◀ status=awaiting_confirm routine=%r (%.0fms)", name, dt)
+    else:
+        log.info("◀ status=%s intent=%s reply=%r (%.0fms)",
+                 out["status"], out.get("intent"), preview(out.get("reply")), dt)
+
+
 def chat(user_id: str, conversation_id: str, message: str) -> dict[str, Any]:
+    log.info("▶ chat user=%s conv=%s msg=%r", user_id, conversation_id, preview(message))
+    t0 = time.perf_counter()
     cfg = {"configurable": {"thread_id": conversation_id}}
     result = _graph.invoke(
         {"messages": [HumanMessage(content=message)], "user_id": user_id}, cfg
     )
-    return _format(result)
+    out = _format(result)
+    _log_out(t0, out)
+    return out
 
 
 def resume(conversation_id: str, approved: bool, edits: dict | None = None) -> dict[str, Any]:
     """Tiếp tục luồng tạo routine sau khi user bấm Confirm/Cancel."""
+    log.info("▶ resume conv=%s approved=%s", conversation_id, approved)
+    t0 = time.perf_counter()
     cfg = {"configurable": {"thread_id": conversation_id}}
     result = _graph.invoke(
         Command(resume={"approved": approved, "edits": edits}), cfg
     )
-    return _format(result)
+    out = _format(result)
+    _log_out(t0, out)
+    return out

@@ -12,6 +12,7 @@ Intent = Literal[
     "progression",    # khi nào nên tăng tạ
     "build_plan",     # build workout plan (P1)
     "create_routine", # ghi routine vào Supabase, có confirm (P1)
+    "knowledge",      # hỏi kiến thức tập luyện chung -> RAG trên tài liệu
     "clarify",        # query mơ hồ -> hỏi lại
     "general",        # chitchat / giới thiệu năng lực
 ]
@@ -44,3 +45,6 @@ class AgentState(TypedDict, total=False):
 
     # Draft câu trả lời do branch node dựng (chứa số liệu thật).
     draft: str | None
+
+    # True khi draft đã là câu trả lời cuối (vd RAG) -> respond không polish lại.
+    no_polish: bool

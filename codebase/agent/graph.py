@@ -24,6 +24,7 @@ def build_graph(checkpointer=None):
     g.add_node("muscle_gap", nodes.muscle_gap)
     g.add_node("build_plan", nodes.build_plan)
     g.add_node("create_routine", nodes.create_routine)
+    g.add_node("knowledge", nodes.knowledge)
     g.add_node("clarify", nodes.clarify)
     g.add_node("general", nodes.general)
     g.add_node("guardrail", nodes.guardrail)
@@ -33,14 +34,14 @@ def build_graph(checkpointer=None):
     g.add_conditional_edges(
         "router",
         nodes.route_intent,
-        ["analyze", "muscle_gap", "build_plan", "create_routine", "clarify", "general"],
+        ["analyze", "muscle_gap", "build_plan", "create_routine", "knowledge", "clarify", "general"],
     )
 
     # Các branch "khuyên" đi qua guardrail; còn lại thẳng tới respond.
     for n in ("analyze", "muscle_gap", "build_plan"):
         g.add_edge(n, "guardrail")
     g.add_edge("guardrail", "respond")
-    for n in ("create_routine", "clarify", "general"):
+    for n in ("create_routine", "knowledge", "clarify", "general"):
         g.add_edge(n, "respond")
     g.add_edge("respond", END)
 

@@ -3,10 +3,11 @@
 Đây là *hợp đồng* giữa Agent và 2 team kia. Agent CHỈ gọi qua các signature dưới
 đây và không quan tâm bên trong là Supabase hay vector search.
 
-Hiện tại: implementation MOCK (deterministic) để chạy end-to-end ngày 1.
-=> Backend thay 5 hàm get_*/create_routine bằng Supabase query.
-=> RAG thay search_fitness_knowledge bằng vector search.
-   Giữ NGUYÊN tên + input + shape output là không cần đổi gì phía Agent.
+DISPATCH: mỗi tool đọc/ghi chọn backend theo cấu hình:
+  - AGENT_USE_MOCK_TOOLS=1 (mặc định) HOẶC chưa có DATABASE_URL -> MOCK (offline,
+    deterministic; dùng cho test/CI/demo nhanh).
+  - AGENT_USE_MOCK_TOOLS=0 và có DATABASE_URL -> Supabase qua `agent/repo.py`.
+Đổi backend KHÔNG đổi signature/shape output -> agent không phải sửa gì.
 
 Hợp đồng lỗi (§5.4):
   - Không có data  -> trả [] / {} (KHÔNG raise). Agent tự lo failure path.
@@ -14,15 +15,34 @@ Hợp đồng lỗi (§5.4):
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from typing import Any
 
 from agent import config
 from agent.analysis import set_volume
 
+log = logging.getLogger("agent.tools")
+
 
 class ToolError(RuntimeError):
     """Lỗi hệ thống khi gọi tool (DB down, ghi thất bại...)."""
+
+
+def _use_db() -> bool:
+    """True khi nên dùng Supabase thật thay vì mock."""
+    if config.USE_MOCK_TOOLS:
+        return False
+    from agent import repo
+
+    return repo.enabled()
+
+
+def _db():
+    """repo module — re-raise repo.ToolError dưới dạng tools.ToolError ở call site."""
+    from agent import repo
+
+    return repo
 
 
 # --------------------------------------------------------------------------- #
@@ -99,6 +119,20 @@ def get_workout_history(
     end_date: str | None = None,
 ) -> list[dict[str, Any]]:
     """Các set đã log, sort theo date tăng dần. [] nếu không có."""
+    if _use_db():
+        try:
+            return _db().get_workout_history(user_id, exercise_name, start_date, end_date)
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
+    return _mock_get_workout_history(user_id, exercise_name, start_date, end_date)
+
+
+def _mock_get_workout_history(
+    user_id: str,
+    exercise_name: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[dict[str, Any]]:
     rows = list(_MOCK_HISTORY.get(user_id, []))
     if exercise_name:
         key = exercise_name.strip().lower()
@@ -112,6 +146,15 @@ def get_workout_history(
 
 def get_exercise_summary(user_id: str) -> list[dict[str, Any]]:
     """Mỗi bài: {exercise_name, last_performed, total_volume_kg, session_count}."""
+    if _use_db():
+        try:
+            return _db().get_exercise_summary(user_id)
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
+    return _mock_get_exercise_summary(user_id)
+
+
+def _mock_get_exercise_summary(user_id: str) -> list[dict[str, Any]]:
     rows = _MOCK_HISTORY.get(user_id, [])
     agg: dict[str, dict[str, Any]] = {}
     for r in rows:
@@ -134,6 +177,15 @@ def get_exercise_summary(user_id: str) -> list[dict[str, Any]]:
 
 def get_muscle_group_volume(user_id: str, time_range_days: int = 28) -> dict[str, float]:
     """{muscle_group: total_volume_kg} trong N ngày gần nhất. {} nếu không có."""
+    if _use_db():
+        try:
+            return _db().get_muscle_group_volume(user_id, time_range_days)
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
+    return _mock_get_muscle_group_volume(user_id, time_range_days)
+
+
+def _mock_get_muscle_group_volume(user_id: str, time_range_days: int = 28) -> dict[str, float]:
     cutoff = (_ANCHOR - timedelta(days=time_range_days)).isoformat()
     vols: dict[str, float] = {}
     for r in _MOCK_HISTORY.get(user_id, []):
@@ -146,6 +198,13 @@ def get_muscle_group_volume(user_id: str, time_range_days: int = 28) -> dict[str
 
 def list_exercise_catalog() -> list[dict[str, str]]:
     """Danh mục bài để map tên -> exercise_id khi tạo routine."""
+    if _use_db():
+        try:
+            cat = _db().list_exercise_catalog()
+            if cat:
+                return cat
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
     return list(EXERCISE_CATALOG)
 
 
@@ -155,6 +214,11 @@ def create_routine(user_id: str, routine: dict[str, Any]) -> dict[str, Any]:
     routine = {name, exercises:[{exercise_id, sets, reps, rest_sec}]}
     return {routine_id}
     """
+    if _use_db():
+        try:
+            return _db().create_routine(user_id, routine)
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
     global _routine_seq
     if not routine.get("exercises"):
         raise ToolError("Routine rỗng, không có bài tập.")
@@ -166,6 +230,11 @@ def create_routine(user_id: str, routine: dict[str, Any]) -> dict[str, Any]:
 
 def list_routines(user_id: str) -> list[dict[str, Any]]:
     """Các routine đã lưu của user. [] nếu chưa có."""
+    if _use_db():
+        try:
+            return _db().list_routines(user_id)
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
     return [r for r in _ROUTINE_STORE if r["user_id"] == user_id]
 
 
@@ -182,7 +251,23 @@ _KB = [
 
 
 def search_fitness_knowledge(query: str, k: int = 4) -> list[dict[str, str]]:
-    """Vector search trên tài liệu fitness. Hiện mock bằng keyword overlap."""
+    """Vector search trên tài liệu fitness.
+
+    Ưu tiên RAG thật (ChromaDB `gym_docs` + Gemini, xem agent/rag.py). Thiếu key /
+    collection thì fallback KB mock (keyword overlap) — agent vẫn chạy offline.
+    """
+    from agent import rag
+
+    hits = rag.search(query, k)
+    if hits:
+        log.info("RAG → ChromaDB: %d đoạn cho %r", len(hits), query[:50])
+        return hits
+    log.info("RAG → mock KB (Chroma chưa sẵn sàng) cho %r", query[:50])
+    return _mock_search_fitness_knowledge(query, k)
+
+
+def _mock_search_fitness_knowledge(query: str, k: int = 4) -> list[dict[str, str]]:
+    """KB mock (keyword overlap) — fallback khi RAG thật chưa sẵn sàng."""
     q = set(query.lower().split())
     scored = []
     for topic, text in _KB:
@@ -195,7 +280,49 @@ def search_fitness_knowledge(query: str, k: int = 4) -> list[dict[str, str]]:
 def resolve_exercise(name: str) -> dict[str, str] | None:
     """Tiện ích: tìm bài trong catalog theo tên (fuzzy nhẹ)."""
     key = name.strip().lower()
-    for e in EXERCISE_CATALOG:
+    for e in list_exercise_catalog():
         if e["name"].lower() == key or key in e["name"].lower():
             return e
     return None
+
+
+# --------------------------------------------------------------------------- #
+# User database (định danh user) — UI gọi để chọn/khởi tạo user
+# --------------------------------------------------------------------------- #
+_MOCK_USERS = {
+    "demo-user": "Alex Nguyen",
+    "new-user": "Newbie",
+}
+
+
+def get_user(user_id: str) -> dict[str, Any] | None:
+    """{user_id, display_name} hoặc None nếu không có."""
+    if _use_db():
+        try:
+            return _db().get_user(user_id)
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
+    name = _MOCK_USERS.get(user_id)
+    return {"user_id": user_id, "display_name": name} if name else None
+
+
+def list_users() -> list[dict[str, Any]]:
+    """Danh sách user (cho UI chọn người demo)."""
+    if _use_db():
+        try:
+            return _db().list_users()
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
+    return [{"user_id": uid, "display_name": n} for uid, n in _MOCK_USERS.items()]
+
+
+def ensure_user(user_id: str, display_name: str | None = None) -> dict[str, Any]:
+    """Upsert user (tạo nếu chưa có). Trả {user_id, display_name}."""
+    if _use_db():
+        try:
+            return _db().ensure_user(user_id, display_name)
+        except _db().ToolError as e:
+            raise ToolError(str(e)) from e
+    name = display_name or _MOCK_USERS.get(user_id, user_id)
+    _MOCK_USERS.setdefault(user_id, name)
+    return {"user_id": user_id, "display_name": name}

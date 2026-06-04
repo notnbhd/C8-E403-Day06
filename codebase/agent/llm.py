@@ -11,10 +11,13 @@ và nằm trong draft; LLM chỉ được diễn đạt lại, không được t
 """
 from __future__ import annotations
 
+import logging
 import re
 
 from agent import config
 from agent.state import Intent
+
+log = logging.getLogger("agent.llm")
 
 _LLM = None  # cache
 
@@ -27,12 +30,23 @@ def get_llm():
     if _LLM is None:
         from langchain_openai import ChatOpenAI
 
-        _LLM = ChatOpenAI(
-            model=config.AGENT_MODEL,
-            api_key=config.OPENROUTER_API_KEY,
-            base_url=config.OPENROUTER_BASE_URL,
-            temperature=config.LLM_TEMPERATURE,
-        )
+        if config.OPENROUTER_API_KEY:
+            _LLM = ChatOpenAI(
+                model=config.AGENT_MODEL,
+                api_key=config.OPENROUTER_API_KEY,
+                base_url=config.OPENROUTER_BASE_URL,
+                temperature=config.LLM_TEMPERATURE,
+            )
+            log.info("LLM: provider=openrouter model=%s", config.AGENT_MODEL)
+        else:  # fallback: custom LLM (vd Mistral) đã cấu hình cho RAG chatbot
+            _LLM = ChatOpenAI(
+                model=config.CUSTOM_LLM_MODEL,
+                api_key=config.CUSTOM_LLM_KEY,
+                base_url=config.CUSTOM_LLM_URL or None,
+                temperature=config.LLM_TEMPERATURE,
+            )
+            log.info("LLM: provider=custom model=%s url=%s",
+                     config.CUSTOM_LLM_MODEL, config.CUSTOM_LLM_URL)
     return _LLM
 
 
@@ -45,6 +59,9 @@ _INTENT_KEYWORDS: list[tuple[Intent, tuple[str, ...]]] = [
     ("progression", ("tăng tạ", "khi nào nên", "progression", "tăng mức", "nặng hơn")),
     ("create_routine", ("tạo routine", "lưu routine", "thêm vào hevy", "save routine", "ghi routine")),
     ("build_plan", ("lên lịch", "build", "chương trình", "giáo án", "plan", "program", "lộ trình")),
+    ("knowledge", ("dinh dưỡng", "protein", "đạm", "calo", "thời gian nghỉ", "nghỉ giữa",
+                   "rep range", "khởi động", "giãn cơ", "hồi phục", "ngủ", "cardio",
+                   "kỹ thuật", "nên ăn", "tần suất", "deload", "overload")),
     ("analyze", ("tiến bộ", "progress", "có tăng", "cải thiện", "phong độ", "thế nào")),
 ]
 
@@ -58,12 +75,14 @@ _ROUTER_SYS = (
     "- progression: hỏi khi nào nên tăng tạ / cách tăng tải\n"
     "- build_plan: muốn được build chương trình tập\n"
     "- create_routine: muốn lưu/tạo routine vào app\n"
+    "- knowledge: hỏi KIẾN THỨC tập luyện chung (dinh dưỡng, thời gian nghỉ, kỹ thuật, "
+    "tần suất, hồi phục...) KHÔNG gắn với dữ liệu cá nhân của user\n"
     "- clarify: câu hỏi quá mơ hồ, thiếu bài/nhóm cơ cụ thể để trả lời\n"
     "- general: chào hỏi, hỏi 'bạn làm được gì'\n"
     "Chỉ trả về đúng một từ intent, không giải thích."
 )
 _VALID = {"analyze", "plateau", "muscle_gap", "progression",
-          "build_plan", "create_routine", "clarify", "general"}
+          "build_plan", "create_routine", "knowledge", "clarify", "general"}
 
 
 def keyword_intent(message: str) -> Intent:
@@ -119,3 +138,35 @@ def polish(draft: str) -> str:
         return resp.content.strip() or draft
     except Exception:
         return draft
+
+
+# --------------------------------------------------------------------------- #
+# RAG — trả lời câu hỏi kiến thức dựa trên tài liệu (grounded trên chunks)
+# --------------------------------------------------------------------------- #
+_RAG_SYS = (
+    "Bạn là HLV thể hình AI nói tiếng Việt. Chỉ trả lời dựa trên TÀI LIỆU THAM KHẢO "
+    "được cung cấp. Nếu tài liệu không đề cập, nói rõ 'Tài liệu không đề cập đến điều "
+    "này'. Trả lời ngắn gọn, thực tế, thân thiện. KHÔNG bịa thông tin ngoài tài liệu."
+)
+
+
+def answer_with_context(question: str, chunks: list[dict]) -> str:
+    """Sinh câu trả lời cho `question` chỉ dựa trên `chunks` (RAG).
+
+    Có LLM: tổng hợp từ context. Offline: trả thẳng đoạn liên quan nhất (vẫn grounded).
+    """
+    if not chunks:
+        return "Mình chưa tìm thấy thông tin phù hợp trong tài liệu."
+    llm = get_llm()
+    if llm is None:
+        return chunks[0]["text"]
+    context = "\n\n".join(f"[Đoạn {i + 1}] {c['text']}" for i, c in enumerate(chunks))
+    prompt = (
+        f"TÀI LIỆU THAM KHẢO:\n{context}\n\n"
+        f"CÂU HỎI: {question}\n\nHãy trả lời dựa trên tài liệu tham khảo."
+    )
+    try:
+        resp = llm.invoke([("system", _RAG_SYS), ("human", prompt)])
+        return resp.content.strip() or chunks[0]["text"]
+    except Exception:
+        return chunks[0]["text"]

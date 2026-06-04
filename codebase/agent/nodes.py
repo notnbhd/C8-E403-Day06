@@ -6,6 +6,7 @@ respond: (tuỳ chọn) LLM diễn đạt lại draft, rồi append vào message
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -13,6 +14,8 @@ from langgraph.types import interrupt
 
 from agent import analysis, config, llm, tools
 from agent.state import AgentState
+
+log = logging.getLogger("agent.nodes")
 
 DISCLAIMER = (
     "⚠️ Gợi ý dựa trên dữ liệu tập của bạn, không thay thế PT/bác sĩ. "
@@ -37,6 +40,7 @@ def router(state: AgentState) -> dict[str, Any]:
     intent = llm.classify_intent(msg)
     names = [e["name"] for e in tools.list_exercise_catalog()]
     target = llm.extract_exercise(msg, names)
+    log.info("router → intent=%s exercise=%s", intent, target)
     # Hỏi về 1 bài cụ thể nhưng câu lại chung chung -> vẫn analyze.
     return {"intent": intent, "target_exercise": target}
 
@@ -50,6 +54,7 @@ def route_intent(state: AgentState) -> str:
         "muscle_gap": "muscle_gap",
         "build_plan": "build_plan",
         "create_routine": "create_routine",
+        "knowledge": "knowledge",
         "clarify": "clarify",
         "general": "general",
     }.get(state.get("intent", "general"), "general")
@@ -189,7 +194,9 @@ def create_routine(state: AgentState) -> dict[str, Any]:
     try:
         res = tools.create_routine(state["user_id"], routine)
     except tools.ToolError as e:
+        log.warning("create_routine THẤT BẠI: %s", e)
         return {"draft": f"Lưu routine thất bại ({e}). Bạn thử lại giúp mình nhé."}
+    log.info("create_routine → đã lưu id=%s", res["routine_id"])
     return {"pending_routine": None,
             "draft": f"✅ Đã lưu **{routine['name']}** (id `{res['routine_id']}`) vào app của bạn."}
 
@@ -201,6 +208,19 @@ def clarify(state: AgentState) -> dict[str, Any]:
     return {"draft": "Mình chưa rõ ý bạn lắm 🤔 Bạn muốn kiểm tra **bài cụ thể** "
                      "(vd 'Bench Press có tiến bộ không?'), **plateau**, hay **nhóm cơ bỏ bê**?",
             "data_sufficient": False}
+
+
+def knowledge(state: AgentState) -> dict[str, Any]:
+    """RAG: trả lời câu hỏi kiến thức tập luyện dựa trên tài liệu (PDF nghiên cứu)."""
+    q = _last_human(state)
+    chunks = tools.search_fitness_knowledge(q, k=4)
+    answer = llm.answer_with_context(q, chunks)
+    srcs = sorted({c["source"] for c in chunks if c.get("source")})
+    log.info("knowledge → %d đoạn, nguồn=%s", len(chunks), srcs)
+    if srcs:
+        answer += "\n\n📚 Nguồn: " + ", ".join(srcs)
+    # no_polish: giữ nguyên câu trả lời đã grounded, không cho LLM diễn đạt lại.
+    return {"knowledge": chunks, "draft": answer, "no_polish": True}
 
 
 def general(state: AgentState) -> dict[str, Any]:
@@ -229,7 +249,7 @@ def guardrail(state: AgentState) -> dict[str, Any]:
 
 def respond(state: AgentState) -> dict[str, Any]:
     draft = state.get("draft") or "Xin lỗi, mình chưa xử lý được yêu cầu này."
-    text = llm.polish(draft)
+    text = draft if state.get("no_polish") else llm.polish(draft)
     if state.get("disclaimer"):
         text = f"{text}\n\n{state['disclaimer']}"
     return {"messages": [AIMessage(content=text)]}
