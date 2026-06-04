@@ -8,15 +8,23 @@
 </head>
 <body>
   <div class="phone">
-    <!-- Status bar (mô phỏng) -->
+    <!-- Status bar (mô phỏng iOS) -->
     <div class="statusbar">
-      <span id="clock">09:25</span>
-      <span class="status-icons">●●● 􀙇 􀛪</span>
+      <span id="clock">09:06</span>
+      <span class="status-right">
+        <svg viewBox="0 0 18 12" width="17" height="11"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4" width="3" height="8" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+        <svg viewBox="0 0 18 13" width="17" height="12"><path d="M9 12.5 .8 4.2a11.6 11.6 0 0 1 16.4 0L9 12.5Z" opacity=".25"/><path d="M9 12.5 3.3 6.8a8 8 0 0 1 11.4 0L9 12.5Z"/></svg>
+        <svg viewBox="0 0 26 13" width="24" height="12"><rect x="0.5" y="0.5" width="21" height="12" rx="3" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="14" height="9" rx="1.5"/><rect x="23" y="4" width="2" height="5" rx="1" opacity=".5"/></svg>
+      </span>
     </div>
 
-    <!-- Header -->
-    <header class="appbar">
-      <div class="appbar-title" id="appbar-title">Trang chủ</div>
+    <!-- Dynamic top bar -->
+    <header class="topbar" id="topbar">
+      <button class="tb-btn tb-back" id="tb-back" aria-label="Back">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="tb-title" id="tb-title">Home</div>
+      <div class="tb-actions" id="tb-actions"></div>
     </header>
 
     <!-- ============ SCREENS ============ -->
@@ -25,39 +33,106 @@
       <!-- HOME -->
       <section class="screen active" data-screen="home">
         <div class="greeting">
-          <h1>Chào, <span id="home-name">Athlete</span> 👋</h1>
-          <p class="muted">Tổng quan tuần này</p>
+          <h1>Hi, <span id="home-name">Athlete</span> 👋</h1>
+          <p class="muted">Here's your week so far</p>
         </div>
-        <div class="stat-row">
-          <div class="stat-card"><div class="stat-num" id="st-sessions">–</div><div class="stat-lbl">Buổi tập</div></div>
+        <div class="stat-strip">
+          <div class="stat-card"><div class="stat-num" id="st-sessions">–</div><div class="stat-lbl">Workouts</div></div>
           <div class="stat-card"><div class="stat-num" id="st-volume">–</div><div class="stat-lbl">Volume (kg)</div></div>
-          <div class="stat-card"><div class="stat-num" id="st-ex">–</div><div class="stat-lbl">Bài theo dõi</div></div>
+          <div class="stat-card"><div class="stat-num" id="st-ex">–</div><div class="stat-lbl">Exercises</div></div>
         </div>
 
-        <div class="insight-card" id="insight-card" onclick="goCoachWith(this.dataset.q)">
-          <div class="insight-head">✨ Coach Insight</div>
-          <div class="insight-body" id="insight-text">Đang tải…</div>
-          <div class="insight-cta">Hỏi Coach →</div>
-        </div>
+        <button class="coach-banner" id="insight-card" onclick="goCoachWith(this.dataset.q)">
+          <span class="coach-ic">✨</span>
+          <span class="coach-text">
+            <b>AI Coach</b>
+            <span class="muted" id="insight-text">Loading…</span>
+          </span>
+          <span class="coach-arrow">›</span>
+        </button>
 
-        <h2 class="section-title">Cân bằng nhóm cơ</h2>
+        <h2 class="section-h">Muscle balance <span class="muted">last 4 weeks</span></h2>
         <div class="muscle-bars" id="muscle-bars"></div>
       </section>
 
-      <!-- HISTORY -->
-      <section class="screen" data-screen="history">
-        <div id="history-list" class="list"></div>
+      <!-- WORKOUT (routines list) -->
+      <section class="screen" data-screen="workout">
+        <button class="btn-primary" onclick="goCoachWith('Tạo routine và lưu vào app giúp tôi')">
+          <span>＋</span> New Routine with AI
+        </button>
+        <h2 class="section-h">My Routines</h2>
+        <div id="routines-list" class="rt-list"></div>
+      </section>
+
+      <!-- PROFILE -->
+      <section class="screen" data-screen="profile">
+        <div class="pf-top">
+          <div class="avatar lg" id="pf-avatar">A</div>
+          <div class="pf-meta">
+            <div class="pf-name" id="pf-name">Athlete</div>
+            <div class="pf-counts">
+              <div><b id="pf-workouts">0</b><span>Workouts</span></div>
+              <div><b id="pf-followers">0</b><span>Followers</span></div>
+              <div><b id="pf-following">0</b><span>Following</span></div>
+            </div>
+          </div>
+        </div>
+
+        <button class="pf-progress" id="pf-progress">
+          <span>Your profile is <b id="pf-pct">80</b>% finished</span>
+          <span class="coach-arrow">→</span>
+        </button>
+
+        <div class="chart-head">
+          <div><b id="chart-total">0 hours</b> <span class="muted">this week</span></div>
+          <button class="range-pill">Last 3 months <span>▾</span></button>
+        </div>
+        <div class="chart-box" id="pf-chart"></div>
+        <div class="toggle-pills" id="pf-toggle">
+          <button class="pill active" data-metric="duration">Duration</button>
+          <button class="pill" data-metric="volume">Volume</button>
+          <button class="pill" data-metric="reps">Reps</button>
+        </div>
+
+        <h2 class="section-h">Dashboard</h2>
+        <div class="dash-grid">
+          <button class="dash-tile" onclick="goCoachWith('')">
+            <span class="dash-ic">✨</span> AI Coach
+          </button>
+          <button class="dash-tile" onclick="showScreen('workout')">
+            <span class="dash-ic">📋</span> Routines
+          </button>
+          <button class="dash-tile" disabled>
+            <span class="dash-ic">📊</span> Statistics
+          </button>
+          <button class="dash-tile" disabled>
+            <span class="dash-ic">📅</span> Calendar
+          </button>
+        </div>
+
+        <h2 class="section-h">Workouts</h2>
+        <div id="profile-workouts" class="wk-list"></div>
+      </section>
+
+      <!-- WORKOUT DETAIL (sub-screen) -->
+      <section class="screen" data-screen="workout-detail">
+        <div id="wd-body"></div>
+      </section>
+
+      <!-- ROUTINE DETAIL (sub-screen) -->
+      <section class="screen" data-screen="routine-detail">
+        <div id="rd-body"></div>
       </section>
 
       <!-- COACH (AI chat) -->
       <section class="screen screen-coach" data-screen="coach">
         <div class="chat-stream" id="chat-stream">
           <div class="msg assistant">
-            <div class="bubble">Mình là <b>Coach AI</b> 🏋️ Mình đọc dữ liệu tập Hevy của bạn và có thể:
+            <div class="bubble">Mình là <b>Coach AI</b> 🏋️ Mình đọc dữ liệu tập của bạn và có thể:
               <br>• Xem một bài có tiến bộ không
               <br>• Phát hiện bạn có đang plateau
               <br>• Chỉ ra nhóm cơ đang bị bỏ bê
-              <br>• Gợi ý & tạo routine
+              <br>• Gợi ý &amp; tạo routine
             </div>
           </div>
         </div>
@@ -68,54 +143,25 @@
           <button class="chip" onclick="sendQuick('Tạo routine và lưu vào app giúp tôi')">Tạo routine</button>
         </div>
         <form class="composer" id="composer" onsubmit="return onSend(event)">
-          <button type="button" class="composer-add">＋</button>
-          <input id="chat-input" autocomplete="off" placeholder="Nhắn cho Coach…" />
+          <input id="chat-input" autocomplete="off" placeholder="Message Coach…" />
           <button type="submit" class="composer-send" id="send-btn">➤</button>
         </form>
-      </section>
-
-      <!-- ROUTINES -->
-      <section class="screen" data-screen="routines">
-        <button class="cta-full" onclick="goCoachWith('Tạo routine và lưu vào app giúp tôi')">＋ Tạo routine với AI</button>
-        <div id="routines-list" class="list"></div>
-      </section>
-
-      <!-- PROFILE -->
-      <section class="screen" data-screen="profile">
-        <div class="profile-head">
-          <div class="avatar" id="pf-avatar">A</div>
-          <div class="pf-name" id="pf-name">Athlete</div>
-          <div class="muted" id="pf-id">demo-user</div>
-        </div>
-        <div class="stat-row">
-          <div class="stat-card"><div class="stat-num" id="pf-sessions">–</div><div class="stat-lbl">Tổng buổi</div></div>
-          <div class="stat-card"><div class="stat-num" id="pf-ex">–</div><div class="stat-lbl">Bài tập</div></div>
-          <div class="stat-card"><div class="stat-num" id="pf-routines">–</div><div class="stat-lbl">Routine</div></div>
-        </div>
-        <div class="settings-list">
-          <div class="settings-item">Đơn vị <span class="muted">kg</span></div>
-          <div class="settings-item">Ngôn ngữ <span class="muted">Tiếng Việt</span></div>
-          <div class="settings-item">Kết nối Hevy <span class="muted">demo</span></div>
-        </div>
       </section>
     </main>
 
     <!-- ============ BOTTOM NAV ============ -->
-    <nav class="tabbar">
+    <nav class="tabbar" id="tabbar">
       <button class="tab active" data-go="home">
-        <span class="ic">🏠</span><span>Home</span>
+        <svg class="ic" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5V20h12V9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Home</span>
       </button>
-      <button class="tab" data-go="history">
-        <span class="ic">📋</span><span>History</span>
-      </button>
-      <button class="tab tab-coach" data-go="coach">
-        <span class="ic">✨</span><span>Coach</span>
-      </button>
-      <button class="tab" data-go="routines">
-        <span class="ic">🗂️</span><span>Routines</span>
+      <button class="tab" data-go="workout">
+        <svg class="ic" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6M2 11v2M20 9v6M22 11v2"/><path d="M7 8v8M17 8v8"/><path d="M7 12h10"/></g></svg>
+        <span>Workout</span>
       </button>
       <button class="tab" data-go="profile">
-        <span class="ic">👤</span><span>Profile</span>
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Profile</span>
       </button>
     </nav>
   </div>
