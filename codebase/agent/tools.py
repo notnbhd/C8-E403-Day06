@@ -74,8 +74,19 @@ _MOCK_HISTORY: dict[str, list[dict[str, Any]]] = {
 }
 
 # routine đã ghi (mock của bảng Supabase `routines`).
-_ROUTINE_STORE: list[dict[str, Any]] = []
-_routine_seq = 0
+_routine_seq = 1
+_ROUTINE_STORE: list[dict[str, Any]] = [
+    {
+        "routine_id": "rt_0001",
+        "user_id": "demo-user",
+        "name": "Push Day A",
+        "exercises": [
+            {"exercise_id": "ex_bench", "name": "Bench Press", "sets": 4, "reps": "5", "rest_sec": 120},
+            {"exercise_id": "ex_ohp", "name": "Overhead Press", "sets": 3, "reps": "8", "rest_sec": 90},
+            {"exercise_id": "ex_incline", "name": "Incline Dumbbell Press", "sets": 3, "reps": "10-12", "rest_sec": 90},
+        ],
+    },
+]
 
 
 # --------------------------------------------------------------------------- #
@@ -151,6 +162,11 @@ def create_routine(user_id: str, routine: dict[str, Any]) -> dict[str, Any]:
     rid = f"rt_{_routine_seq:04d}"
     _ROUTINE_STORE.append({"routine_id": rid, "user_id": user_id, **routine})
     return {"routine_id": rid}
+
+
+def list_routines(user_id: str) -> list[dict[str, Any]]:
+    """Các routine đã lưu của user. [] nếu chưa có."""
+    return [r for r in _ROUTINE_STORE if r["user_id"] == user_id]
 
 
 # --------------------------------------------------------------------------- #

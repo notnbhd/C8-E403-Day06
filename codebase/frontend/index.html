@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Hevy — AI Coach</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="phone">
+    <!-- Status bar (mô phỏng) -->
+    <div class="statusbar">
+      <span id="clock">09:25</span>
+      <span class="status-icons">●●● 􀙇 􀛪</span>
+    </div>
+
+    <!-- Header -->
+    <header class="appbar">
+      <div class="appbar-title" id="appbar-title">Trang chủ</div>
+    </header>
+
+    <!-- ============ SCREENS ============ -->
+    <main class="screens">
+
+      <!-- HOME -->
+      <section class="screen active" data-screen="home">
+        <div class="greeting">
+          <h1>Chào, <span id="home-name">Athlete</span> 👋</h1>
+          <p class="muted">Tổng quan tuần này</p>
+        </div>
+        <div class="stat-row">
+          <div class="stat-card"><div class="stat-num" id="st-sessions">–</div><div class="stat-lbl">Buổi tập</div></div>
+          <div class="stat-card"><div class="stat-num" id="st-volume">–</div><div class="stat-lbl">Volume (kg)</div></div>
+          <div class="stat-card"><div class="stat-num" id="st-ex">–</div><div class="stat-lbl">Bài theo dõi</div></div>
+        </div>
+
+        <div class="insight-card" id="insight-card" onclick="goCoachWith(this.dataset.q)">
+          <div class="insight-head">✨ Coach Insight</div>
+          <div class="insight-body" id="insight-text">Đang tải…</div>
+          <div class="insight-cta">Hỏi Coach →</div>
+        </div>
+
+        <h2 class="section-title">Cân bằng nhóm cơ</h2>
+        <div class="muscle-bars" id="muscle-bars"></div>
+      </section>
+
+      <!-- HISTORY -->
+      <section class="screen" data-screen="history">
+        <div id="history-list" class="list"></div>
+      </section>
+
+      <!-- COACH (AI chat) -->
+      <section class="screen screen-coach" data-screen="coach">
+        <div class="chat-stream" id="chat-stream">
+          <div class="msg assistant">
+            <div class="bubble">Mình là <b>Coach AI</b> 🏋️ Mình đọc dữ liệu tập Hevy của bạn và có thể:
+              <br>• Xem một bài có tiến bộ không
+              <br>• Phát hiện bạn có đang plateau
+              <br>• Chỉ ra nhóm cơ đang bị bỏ bê
+              <br>• Gợi ý & tạo routine
+            </div>
+          </div>
+        </div>
+        <div class="chips" id="chips">
+          <button class="chip" onclick="sendQuick('Bench Press của tôi có tiến bộ không?')">Bench tiến bộ?</button>
+          <button class="chip" onclick="sendQuick('Tôi có đang plateau không ở Squat?')">Plateau?</button>
+          <button class="chip" onclick="sendQuick('Nhóm cơ nào tôi đang bỏ bê?')">Nhóm cơ bỏ bê?</button>
+          <button class="chip" onclick="sendQuick('Tạo routine và lưu vào app giúp tôi')">Tạo routine</button>
+        </div>
+        <form class="composer" id="composer" onsubmit="return onSend(event)">
+          <button type="button" class="composer-add">＋</button>
+          <input id="chat-input" autocomplete="off" placeholder="Nhắn cho Coach…" />
+          <button type="submit" class="composer-send" id="send-btn">➤</button>
+        </form>
+      </section>
+
+      <!-- ROUTINES -->
+      <section class="screen" data-screen="routines">
+        <button class="cta-full" onclick="goCoachWith('Tạo routine và lưu vào app giúp tôi')">＋ Tạo routine với AI</button>
+        <div id="routines-list" class="list"></div>
+      </section>
+
+      <!-- PROFILE -->
+      <section class="screen" data-screen="profile">
+        <div class="profile-head">
+          <div class="avatar" id="pf-avatar">A</div>
+          <div class="pf-name" id="pf-name">Athlete</div>
+          <div class="muted" id="pf-id">demo-user</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-card"><div class="stat-num" id="pf-sessions">–</div><div class="stat-lbl">Tổng buổi</div></div>
+          <div class="stat-card"><div class="stat-num" id="pf-ex">–</div><div class="stat-lbl">Bài tập</div></div>
+          <div class="stat-card"><div class="stat-num" id="pf-routines">–</div><div class="stat-lbl">Routine</div></div>
+        </div>
+        <div class="settings-list">
+          <div class="settings-item">Đơn vị <span class="muted">kg</span></div>
+          <div class="settings-item">Ngôn ngữ <span class="muted">Tiếng Việt</span></div>
+          <div class="settings-item">Kết nối Hevy <span class="muted">demo</span></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ============ BOTTOM NAV ============ -->
+    <nav class="tabbar">
+      <button class="tab active" data-go="home">
+        <span class="ic">🏠</span><span>Home</span>
+      </button>
+      <button class="tab" data-go="history">
+        <span class="ic">📋</span><span>History</span>
+      </button>
+      <button class="tab tab-coach" data-go="coach">
+        <span class="ic">✨</span><span>Coach</span>
+      </button>
+      <button class="tab" data-go="routines">
+        <span class="ic">🗂️</span><span>Routines</span>
+      </button>
+      <button class="tab" data-go="profile">
+        <span class="ic">👤</span><span>Profile</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
