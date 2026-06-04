@@ -1,6 +1,16 @@
 // ---- Hevy AI webapp (vanilla) ----
 const USER = "demo-user";
-const CID = "web-" + Math.random().toString(36).slice(2, 10);
+// Giữ conversation_id qua các lần reload (localStorage) -> hội thoại liền mạch,
+// không reset memory mỗi khi tải lại trang. Theo từng user.
+const CID = (() => {
+  const key = "hevy_cid_" + USER;
+  let cid = localStorage.getItem(key);
+  if (!cid) {
+    cid = "web-" + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem(key, cid);
+  }
+  return cid;
+})();
 const api = (p, opts) => fetch("/api" + p, opts).then((r) => r.json());
 
 const state = { name: "Athlete", screen: "home", returnTo: "home", routines: [] };
@@ -326,7 +336,11 @@ function addBubble(role, html, cls = "") {
 function typing() { return addBubble("assistant", "<span></span><span></span><span></span>", "typing"); }
 
 function renderReply(out) {
-  if (out.status === "awaiting_confirm") return renderRoutine(out.routine);
+  if (out.status === "awaiting_confirm") {
+    // Giải thích 'vì sao + cách tập' (LLM viết trước interrupt) hiện trên thẻ xác nhận.
+    if (out.reply) addBubble("assistant", md(out.reply));
+    return renderRoutine(out.routine);
+  }
   const parts = (out.reply || "").split(/\n\n(?=⚠️)/);
   addBubble("assistant", md(parts[0]));
   if (parts[1]) addBubble("assistant", md(parts[1]), "warn");

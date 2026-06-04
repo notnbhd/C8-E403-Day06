@@ -1,18 +1,23 @@
 # Agent Workflow — Hevy AI Insight Chatbot
 
-LangGraph agent đọc dữ liệu tập Hevy và trả lời câu hỏi về tiến độ.
-Thiết kế & interface đầy đủ: [`../docs/agent-workflow/00-architecture-and-contracts.md`](../docs/agent-workflow/00-architecture-and-contracts.md).
+**ReAct agent** (LangGraph `create_react_agent`) đọc dữ liệu tập Hevy và trả lời câu
+hỏi về tiến độ. LLM tự chọn tool; **mọi con số do Python tính trong tool, LLM không
+bịa** (grounding). Thiết kế & interface:
+[`../docs/agent-workflow/00-architecture-and-contracts.md`](../docs/agent-workflow/00-architecture-and-contracts.md).
 
 ## Cài & chạy
 
 ```bash
 uv pip install -r codebase/agent/requirements.txt      # vào .venv hiện tại
-PYTHONPATH=codebase python -m pytest codebase/agent/tests -q   # 11 test, chạy offline
+PYTHONPATH=codebase python -m pytest codebase/agent/tests -q
 ```
 
-Không cần `OPENROUTER_API_KEY` để test: thiếu key thì agent chạy ở chế độ
-template offline (router bằng keyword, câu trả lời dùng thẳng draft). Có key thì
-LLM diễn đạt lại cho tự nhiên — **mọi con số vẫn do Python tính, LLM không bịa**.
+Test gồm 2 nhóm: **analysis thuần** (deterministic, chạy offline không cần key) +
+**integration** gọi LLM thật (tự `skip` nếu thiếu key — `conftest.py` chủ động xoá
+key để CI chạy offline).
+
+ReAct **bắt buộc có LLM** để hoạt động (không còn chế độ template offline). Cấu hình
+một trong hai: `OPENROUTER_API_KEY` hoặc `CUSTOM_LLM_KEY` (OpenAI-compatible).
 
 ```bash
 # Bật LLM thật:
@@ -41,14 +46,16 @@ Hoặc chạy HTTP API: `uvicorn agent.api:app --reload` → `POST /chat`, `POST
 
 | File | Vai trò |
 |---|---|
-| `state.py` | AgentState (schema LangGraph) |
 | `analysis.py` | **Pure functions** tính 1RM/trend/plateau/muscle-gap (lớp grounding) |
-| `tools.py` | **Interface contract** §5 — hiện mock; Backend/RAG thay impl, giữ nguyên signature |
-| `llm.py` | OpenRouter + fallback offline (router + diễn đạt) |
-| `nodes.py` | Các node graph + guardrail sức khoẻ |
-| `graph.py` | Lắp StateGraph |
+| `tools.py` | **Interface contract** §5 — data layer (mock ↔ Supabase); Backend/RAG thay impl, giữ signature |
+| `react_tools.py` | Các `@tool` ReAct (wrap analysis+tools, giữ grounding) + system prompt + `CoachState` |
+| `llm.py` | Khởi tạo model LLM (OpenRouter / custom) cho ReAct |
+| `graph.py` | Dựng ReAct agent (`create_react_agent`) |
 | `runner.py` | API public cho UI (`chat`, `resume`) |
 | `api.py` | FastAPI (tuỳ chọn) |
+
+Routine có **human-in-the-loop**: tool `save_routine` gọi `interrupt()` → graph dừng,
+UI hiện preview + nút Lưu/Huỷ → `resume(approved=...)` mới ghi DB.
 
 ## Cho Backend & RAG
 

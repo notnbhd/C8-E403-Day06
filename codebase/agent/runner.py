@@ -27,7 +27,22 @@ log = logging.getLogger("agent.runner")
 # Một checkpointer in-memory cho cả tiến trình (giữ memory theo thread_id).
 # Production: thay bằng PostgresSaver(Supabase) — xem docs §3.
 _checkpointer = MemorySaver()
-_graph = build_graph(checkpointer=_checkpointer)
+_graph = None  # build lazy: tránh raise lúc import khi chưa có LLM key (vd pytest offline).
+
+
+def _get_graph():
+    global _graph
+    if _graph is None:
+        _graph = build_graph(checkpointer=_checkpointer)
+    return _graph
+
+
+def _last_ai_text(result: dict[str, Any]) -> str:
+    """Nội dung AIMessage cuối có text (bỏ qua message chỉ chứa tool_calls)."""
+    for msg in reversed(result.get("messages", [])):
+        if isinstance(msg, AIMessage) and msg.content:
+            return msg.content
+    return ""
 
 
 def _format(result: dict[str, Any]) -> dict[str, Any]:
@@ -35,18 +50,15 @@ def _format(result: dict[str, Any]) -> dict[str, Any]:
     interrupts = result.get("__interrupt__")
     if interrupts:
         payload = interrupts[0].value
+        # Text LLM viết NGAY TRONG message gọi save_routine (giải thích 'vì sao + cách
+        # tập') -> hiện phía trên thẻ xác nhận. None nếu LLM không kèm lời nào.
         return {
             "status": "awaiting_confirm",
             "type": payload.get("type"),
             "routine": payload.get("routine"),
-            "reply": None,
+            "reply": _last_ai_text(result) or None,
         }
-    reply = ""
-    for msg in reversed(result.get("messages", [])):
-        if isinstance(msg, AIMessage):
-            reply = msg.content
-            break
-    return {"status": "ok", "reply": reply, "intent": result.get("intent")}
+    return {"status": "ok", "reply": _last_ai_text(result)}
 
 
 def _log_out(t0: float, out: dict[str, Any]) -> None:
@@ -55,15 +67,15 @@ def _log_out(t0: float, out: dict[str, Any]) -> None:
         name = (out.get("routine") or {}).get("name")
         log.info("◀ status=awaiting_confirm routine=%r (%.0fms)", name, dt)
     else:
-        log.info("◀ status=%s intent=%s reply=%r (%.0fms)",
-                 out["status"], out.get("intent"), preview(out.get("reply")), dt)
+        log.info("◀ status=%s reply=%r (%.0fms)",
+                 out["status"], preview(out.get("reply")), dt)
 
 
 def chat(user_id: str, conversation_id: str, message: str) -> dict[str, Any]:
     log.info("▶ chat user=%s conv=%s msg=%r", user_id, conversation_id, preview(message))
     t0 = time.perf_counter()
     cfg = {"configurable": {"thread_id": conversation_id}}
-    result = _graph.invoke(
+    result = _get_graph().invoke(
         {"messages": [HumanMessage(content=message)], "user_id": user_id}, cfg
     )
     out = _format(result)
@@ -76,7 +88,7 @@ def resume(conversation_id: str, approved: bool, edits: dict | None = None) -> d
     log.info("▶ resume conv=%s approved=%s", conversation_id, approved)
     t0 = time.perf_counter()
     cfg = {"configurable": {"thread_id": conversation_id}}
-    result = _graph.invoke(
+    result = _get_graph().invoke(
         Command(resume={"approved": approved, "edits": edits}), cfg
     )
     out = _format(result)
