@@ -1,14 +1,3 @@
-"""LLM access qua OpenRouter + fallback offline.
-
-Nếu CÓ OPENROUTER_API_KEY: dùng ChatOpenAI trỏ vào OpenRouter để (a) phân loại
-intent, (b) diễn đạt lại câu trả lời cho tự nhiên.
-
-Nếu KHÔNG có key: rơi về chế độ offline — intent bằng keyword, câu trả lời dùng
-thẳng draft template. Nhờ vậy graph chạy + test được mà không cần API key.
-
-LƯU Ý GROUNDING: kể cả khi có LLM, mọi CON SỐ đều do agent/analysis.py tính sẵn
-và nằm trong draft; LLM chỉ được diễn đạt lại, không được tạo số mới.
-"""
 from __future__ import annotations
 
 import logging
